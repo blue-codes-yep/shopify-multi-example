@@ -3,7 +3,7 @@
 client_id = "3d1f0e2320eadf5c63866abe540cf6f6"
 name = "multi-work-example"
 handle = "multi-work-example"
-application_url = "https://alive-slide-vacation-safer.trycloudflare.com"
+application_url = "https://actors-snowboard-considered-exists.trycloudflare.com"
 embedded = true
 
 [build]
@@ -23,13 +23,13 @@ api_version = "2025-04"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products"
+scopes = "write_products,read_inventory,write_inventory,read_locations"
 
 [auth]
 redirect_urls = [
-  "https://alive-slide-vacation-safer.trycloudflare.com/auth/callback",
-  "https://alive-slide-vacation-safer.trycloudflare.com/auth/shopify/callback",
-  "https://alive-slide-vacation-safer.trycloudflare.com/api/auth/callback"
+  "https://actors-snowboard-considered-exists.trycloudflare.com/auth/callback",
+  "https://actors-snowboard-considered-exists.trycloudflare.com/auth/shopify/callback",
+  "https://actors-snowboard-considered-exists.trycloudflare.com/api/auth/callback"
 ]
 
 [pos]
