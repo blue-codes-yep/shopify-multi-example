@@ -3,7 +3,7 @@
 client_id = "3d1f0e2320eadf5c63866abe540cf6f6"
 name = "multi-work-example"
 handle = "multi-work-example"
-application_url = "https://actors-snowboard-considered-exists.trycloudflare.com"
+application_url = "https://plots-smilies-ip-twice.trycloudflare.com"
 embedded = true
 
 [build]
@@ -27,9 +27,9 @@ scopes = "write_products,read_inventory,write_inventory,read_locations"
 
 [auth]
 redirect_urls = [
-  "https://actors-snowboard-considered-exists.trycloudflare.com/auth/callback",
-  "https://actors-snowboard-considered-exists.trycloudflare.com/auth/shopify/callback",
-  "https://actors-snowboard-considered-exists.trycloudflare.com/api/auth/callback"
+  "https://plots-smilies-ip-twice.trycloudflare.com/auth/callback",
+  "https://plots-smilies-ip-twice.trycloudflare.com/auth/shopify/callback",
+  "https://plots-smilies-ip-twice.trycloudflare.com/api/auth/callback"
 ]
 
 [pos]

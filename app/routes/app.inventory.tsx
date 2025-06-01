@@ -51,14 +51,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   
   const url = new URL(request.url);
   const cursor = url.searchParams.get("cursor") || null;
+  const before = url.searchParams.get("before") || null;
   const searchTerm = url.searchParams.get("searchTerm") || "";
   
   // Query for products with inventory data
   const productsQuery = `
-    query GetProducts($first: Int!, $after: String, $query: String) {
-      products(first: $first, after: $after, query: $query) {
+    query GetProducts($first: Int, $last: Int, $after: String, $before: String, $query: String) {
+      products(first: $first, last: $last, after: $after, before: $before, query: $query) {
         pageInfo {
           hasNextPage
+          hasPreviousPage
+          startCursor
           endCursor
         }
         nodes {
@@ -94,9 +97,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
   `;
 
+  // When using 'before', we need to use 'last', not 'first'
   const variables = {
-    first: 10,
+    first: before ? null : 10,
+    last: before ? 10 : null,
     after: cursor,
+    before: before,
     query: searchTerm,
   };
 
@@ -238,6 +244,7 @@ export default function InventoryManager() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [toastError, setToastError] = useState(false);
+  const [cursorStack, setCursorStack] = useState<string[]>([]);
   
   const { selectedResources, allResourcesSelected, handleSelectionChange } = 
     useIndexResourceState(products.flatMap((p: Product) => p.variants.map((v) => v.id)));
@@ -299,14 +306,40 @@ export default function InventoryManager() {
     }
     if (pageInfo.endCursor) {
       searchParams.set("cursor", pageInfo.endCursor);
+      // Add current end cursor to stack when moving forward
+      setCursorStack(prev => [...prev, pageInfo.endCursor]);
     }
+    submit(searchParams, { method: "get" });
+  };
+  
+  const handlePreviousPage = () => {
+    const searchParams = new URLSearchParams();
+    if (searchValue) {
+      searchParams.set("searchTerm", searchValue);
+    }
+    
+    // Get the previous cursor from our stack
+    if (cursorStack.length > 0) {
+      // Remove the last cursor from the stack (we're going back)
+      const newStack = [...cursorStack];
+      newStack.pop();
+      setCursorStack(newStack);
+      
+      // If we still have a cursor in the stack, use it as the "before" parameter
+      if (newStack.length > 0) {
+        searchParams.set("before", newStack[newStack.length - 1]);
+      }
+    }
+    
     submit(searchParams, { method: "get" });
   };
   
   // Show toast when action completes
   if (actionData && !showToast) {
     if (actionData.success && 'results' in actionData) {
-      setToastMessage(`Successfully updated ${actionData.results.length} variant(s) inventory quantities`);
+      // Count the actual number of updates made, not the number of results
+      const updateCount = Object.keys(inventoryChanges).length;
+      setToastMessage(`Successfully updated ${updateCount} variant(s) inventory quantities`);
     } else {
       setToastMessage(`Error: ${
         'error' in actionData 
@@ -421,11 +454,11 @@ export default function InventoryManager() {
                       {rowMarkup}
                     </IndexTable>
                     
-                    {pageInfo.hasNextPage && (
+                    {(pageInfo.hasNextPage || cursorStack.length > 0) && (
                       <div style={{ marginTop: "16px", display: "flex", justifyContent: "center" }}>
                         <Pagination
-                          hasPrevious={false}
-                          onPrevious={() => {}}
+                          hasPrevious={cursorStack.length > 0}
+                          onPrevious={handlePreviousPage}
                           hasNext={pageInfo.hasNextPage}
                           onNext={handleNextPage}
                         />
