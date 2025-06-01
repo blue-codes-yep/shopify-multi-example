@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { useActionData, useLoaderData, useNavigation, useSubmit } from "@remix-run/react";
 import {
@@ -15,6 +15,10 @@ import {
   Banner,
   Pagination,
   Box,
+  Spinner,
+  Tooltip,
+  Icon,
+  Link,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
@@ -55,6 +59,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const searchTerm = url.searchParams.get("searchTerm") || "";
   
   // Query for products with inventory data
+  // Build a more flexible search query that finds the term anywhere in product or variant names or SKUs
+  let searchQuery = searchTerm;
+  if (searchTerm && !searchTerm.includes(':')) {
+    // Format the query to search in product title, variant title, and SKU
+    searchQuery = `(title:*${searchTerm}* OR variant_title:*${searchTerm}* OR sku:*${searchTerm}*)`;
+  }
+  
   const productsQuery = `
     query GetProducts($first: Int, $last: Int, $after: String, $before: String, $query: String) {
       products(first: $first, last: $last, after: $after, before: $before, query: $query) {
@@ -103,7 +114,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     last: before ? 10 : null,
     after: cursor,
     before: before,
-    query: searchTerm,
+    query: searchQuery,
   };
 
   const response = await admin.graphql(productsQuery, { variables });
@@ -245,11 +256,40 @@ export default function InventoryManager() {
   const [toastMessage, setToastMessage] = useState("");
   const [toastError, setToastError] = useState(false);
   const [cursorStack, setCursorStack] = useState<string[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   
   const { selectedResources, allResourcesSelected, handleSelectionChange } = 
     useIndexResourceState(products.flatMap((p: Product) => p.variants.map((v) => v.id)));
   
   const isSubmitting = navigation.state === "submitting";
+  const isLoading = navigation.state === "loading";
+  
+  // Debounced search function
+  const debouncedSearch = useCallback(
+    debounce((value: string) => {
+      setIsSearching(true);
+      const searchParams = new URLSearchParams();
+      if (value) {
+        searchParams.set("searchTerm", value);
+      }
+      // Reset cursor stack when searching
+      setCursorStack([]);
+      submit(searchParams, { method: "get" });
+    }, 500),
+    []
+  );
+  
+  // Effect to trigger search when searchValue changes
+  useEffect(() => {
+    debouncedSearch(searchValue);
+  }, [searchValue, debouncedSearch]);
+  
+  // Effect to handle navigation state
+  useEffect(() => {
+    if (navigation.state === "idle") {
+      setIsSearching(false);
+    }
+  }, [navigation.state]);
   
   const handleQuantityChange = (variantId: string, newValue: string) => {
     const newQty = parseInt(newValue, 10);
@@ -290,12 +330,12 @@ export default function InventoryManager() {
     submit({ updates: JSON.stringify(updates) }, { method: "post" });
   };
   
-  const handleSearch = () => {
-    const searchParams = new URLSearchParams();
-    if (searchValue) {
-      searchParams.set("searchTerm", searchValue);
-    }
-    submit(searchParams, { method: "get" });
+  const handleSearchValueChange = (value: string) => {
+    setSearchValue(value);
+  };
+  
+  const handleClearSearch = () => {
+    setSearchValue("");
   };
   
   // Handle pagination
@@ -418,24 +458,42 @@ export default function InventoryManager() {
           <Layout.Section>
             <Card>
               <Box padding="400">
-                <div style={{ marginBottom: "16px", display: "flex", gap: "8px" }}>
-                  <div style={{ flex: 1 }}>
-                    <TextField
-                      label="Search products"
-                      value={searchValue}
-                      onChange={setSearchValue}
-                      autoComplete="off"
-                      placeholder="Search by title, SKU..."
-                      onClearButtonClick={() => setSearchValue("")}
-                      clearButton
-                    />
+                <div style={{ marginBottom: "16px" }}>
+                  <div style={{ marginBottom: "8px", display: "flex", alignItems: "center" }}>
+                    <Text as="span" variant="bodyMd" fontWeight="semibold">Search products</Text>
+                    <Tooltip content="Type any part of a product name, variant name, or SKU. We'll find matches containing your search term.">
+                      <span style={{ marginLeft: "8px", display: "inline-flex" }}>
+                        <Icon source="questionMarkMajor" />
+                      </span>
+                    </Tooltip>
                   </div>
-                  <div style={{ marginTop: "26px" }}>
-                    <Button onClick={handleSearch}>Search</Button>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <div style={{ flex: 1 }}>
+                      <TextField
+                        label="Search products"
+                        labelHidden
+                        value={searchValue}
+                        onChange={handleSearchValueChange}
+                        autoComplete="off"
+                        placeholder="Search by title, SKU..."
+                        onClearButtonClick={handleClearSearch}
+                        clearButton
+                        prefix={isSearching ? <Spinner size="small" /> : null}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ marginTop: "8px" }}>
+                    <Text variant="bodySm" as="p" tone="subdued">
+                      For advanced filtering, try syntax like <Link url="https://shopify.dev/docs/api/admin-graphql/latest/queries/products" external monochrome>title:*jacket* OR sku:BLU-*</Link>
+                    </Text>
                   </div>
                 </div>
                 
-                {products.length > 0 ? (
+                {isLoading && !isSubmitting ? (
+                  <div style={{ display: "flex", justifyContent: "center", padding: "2rem" }}>
+                    <Spinner size="large" />
+                  </div>
+                ) : products.length > 0 ? (
                   <>
                     <IndexTable
                       resourceName={resourceName}
@@ -486,4 +544,24 @@ export default function InventoryManager() {
       </Page>
     </Frame>
   );
+}
+
+// Debounce helper function
+function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  
+  return function(...args: Parameters<T>) {
+    const later = () => {
+      timeout = null;
+      func(...args);
+    };
+    
+    if (timeout !== null) {
+      clearTimeout(timeout);
+    }
+    timeout = setTimeout(later, wait);
+  };
 } 
