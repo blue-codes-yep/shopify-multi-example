@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useActionData, useLoaderData, useNavigation, useSubmit } from "@remix-run/react";
@@ -112,7 +112,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const variables = {
       first: 50,
       after: cursor,
-      query: searchTerm ? searchTerm : customerIds.map(id => `id:${id.replace("gid://shopify/Customer/", "")}`).join(" OR "),
+      query: searchTerm 
+        ? searchTerm 
+        : customerIds.length > 0 
+          ? customerIds.map(id => `id:${id.replace("gid://shopify/Customer/", "")}`).join(" OR ")
+          : "",
     };
 
     const response = await admin.graphql(queryString, { variables });
@@ -121,14 +125,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     // Combine customer data with loyalty points
     const customersWithPoints = customers.nodes
-      .filter((customer: any) => pointsMap[customer.id])
       .map((customer: any) => ({
         id: customer.id,
         email: customer.email,
         displayName: customer.displayName || customer.email,
         points: pointsMap[customer.id]?.points || 0,
         updatedAt: pointsMap[customer.id]?.updatedAt || new Date().toISOString(),
-      }));
+      }))
+      // Only filter by points when not searching
+      .filter((customer: any) => searchTerm ? true : pointsMap[customer.id]);
 
     responseData.customers = customersWithPoints;
     responseData.pageInfo = customers.pageInfo;
@@ -195,6 +200,56 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         pointsEarned,
       };
     });
+
+    // Automatically award points for orders that have customers
+    for (const order of processedOrders) {
+      if (order.customer.id && order.pointsEarned > 0) {
+        // Check if this order has already been processed
+        const processedOrder = await prisma.processedOrder.findUnique({
+          where: { id: order.id },
+        });
+        
+        // Skip if already processed
+        if (processedOrder) {
+          continue;
+        }
+        
+        const customerId = order.customer.id;
+        
+        // Check if customer already has points
+        const existingPoints = await prisma.loyaltyPoints.findUnique({
+          where: { customerId },
+        });
+        
+        if (existingPoints) {
+          // Update existing points
+          await prisma.loyaltyPoints.update({
+            where: { customerId },
+            data: {
+              points: existingPoints.points + order.pointsEarned,
+              updatedAt: new Date(),
+            },
+          });
+        } else {
+          // Create new points record
+          await prisma.loyaltyPoints.create({
+            data: {
+              customerId,
+              points: order.pointsEarned,
+              updatedAt: new Date(),
+            },
+          });
+        }
+        
+        // Mark this order as processed
+        await prisma.processedOrder.create({
+          data: {
+            id: order.id,
+            pointsAwarded: order.pointsEarned,
+          },
+        });
+      }
+    }
 
     responseData.recentOrders = processedOrders;
     responseData.pageInfo = orders.pageInfo;
@@ -304,6 +359,15 @@ export default function LoyaltyPointsManager() {
     useIndexResourceState(customers);
   
   const isSubmitting = navigation.state === "submitting";
+
+  // Update selectedCustomerId when selection changes
+  useEffect(() => {
+    if (selectedResources.length === 1) {
+      setSelectedCustomerId(selectedResources[0]);
+    } else {
+      setSelectedCustomerId("");
+    }
+  }, [selectedResources]);
 
   const tabs = [
     {

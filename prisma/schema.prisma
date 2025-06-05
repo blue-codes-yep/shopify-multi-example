@@ -40,3 +40,9 @@ model LoyaltyPoints {
   points    Int
   updatedAt DateTime @default(now())
 }
+
+model ProcessedOrder {
+  id        String   @id
+  pointsAwarded Int
+  createdAt DateTime @default(now())
+}

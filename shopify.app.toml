@@ -3,7 +3,7 @@
 client_id = "3d1f0e2320eadf5c63866abe540cf6f6"
 name = "multi-work-example"
 handle = "multi-work-example"
-application_url = "https://feature-peru-malawi-ea.trycloudflare.com"
+application_url = "https://program-maine-honest-chances.trycloudflare.com"
 embedded = true
 
 [build]
@@ -39,9 +39,9 @@ scopes = "read_customers,read_inventory,read_locations,read_orders,write_custome
 
 [auth]
 redirect_urls = [
-  "https://feature-peru-malawi-ea.trycloudflare.com/auth/callback",
-  "https://feature-peru-malawi-ea.trycloudflare.com/auth/shopify/callback",
-  "https://feature-peru-malawi-ea.trycloudflare.com/api/auth/callback"
+  "https://program-maine-honest-chances.trycloudflare.com/auth/callback",
+  "https://program-maine-honest-chances.trycloudflare.com/auth/shopify/callback",
+  "https://program-maine-honest-chances.trycloudflare.com/api/auth/callback"
 ]
 
 [pos]
